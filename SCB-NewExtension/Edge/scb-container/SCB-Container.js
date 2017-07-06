@@ -1,6 +1,11 @@
 const DEBUG = true;
 var clickBaitLink = "null";
 var $ = jQuery;
+var user = { selectedColor: '#ffffff' };
+var c = console;
+c.l = function(l){
+    if(DEBUG) console.log(l);
+};
 
 $.fn.calcHeight = function () {
     var t = $(this);
@@ -23,9 +28,23 @@ if (document.location.href.indexOf('?') > -1) {
 // Get the current color from Chrome storage and set the custom colors in the document.
 chrome.storage.local.get('selectedColor', function (items) {
     setElementColors(items.selectedColor);
+    user.selectedColor = items.selectedColor;
 });
 
 sortComments('votes');
+
+chrome.storage.onChanged.addListener(function (changes, namespace) {
+    if (namespace !== 'local') return;
+    $.each(changes, function (index, value) {
+        if(typeof user[index] == 'undefined'){
+            c.l(index +': is not being used');
+            return;
+        }
+
+        user[index] = value.newValue;
+        c.l(index +': was changed from ' +value.oldValue +' to ' +value.newValue);
+    });
+});
 
 if (DEBUG) {
     processingCommentList({
@@ -111,17 +130,17 @@ function addEventHandlers() {
         }
     });
 
-    $('#topSC').on('click', function () {
+    $('#sort-top').on('click', function () {
         sortComments('votes');
     });
 
-    $('#dateSC').on('click', function () {
+    $('#sort-date').on('click', function () {
         sortComments('date');
     });
 
     var submitCB = $('#submitCB');
     var submitHeight = submitCB.calcHeight();
-    var commentArea = $('#commentArea');
+    var commentArea = $('#comment-area');
 
     submitCB.on('focusin', function () {
         var t = $(this);
@@ -130,14 +149,14 @@ function addEventHandlers() {
             height: t[0].scrollHeight + 50
         });
 
-        $('#controlBar, #controlBarButtons').changeClass('block');
-        $('#charCounter').changeClass('flex');
+        $('#control-bar, #control-bar-buttons').changeClass('block');
+        $('#counter').changeClass('flex');
 
         commentArea.css('height', 305 - t[0].offsetHeight);
     }).on('focusout', () => {
         if (submitCB.val().length > 0) return;
 
-        $('#controlBar, #charCounter, #controlBarButtons').changeClass('hidden');
+        $('#control-bar, #counter, #control-bar-buttons').changeClass('hidden');
         submitCB.css({
             height: '',
             paddingBottom: 0
@@ -149,29 +168,29 @@ function addEventHandlers() {
             submitCB.val(submitCB.val().replace('\n', ' '));
         }
 
-        $('#charCounter').text(140 - submitCB.val().length);
+        $('#counter').text(140 - submitCB.val().length);
         commentArea.css('height', 305 - submitArea.offsetHeight);
         if (submitCB.val().indexOf('\n') !== -1) {
             submitCB.val(submitCB.val().replace('\n', ' '));
         }
     });
 
-    $('#btnClose').on('click', function () {
+    $('#close').on('click', function () {
         var submitArea = $('#submitCB');
         submitArea.val('');
-        $('#controlBar, #charCounter').changeClass('hidden');
-        $('#commentArea').css('height', 265);
+        $('#control-bar, #counter').changeClass('hidden');
+        $('#comment-area').css('height', 265);
         submitArea.css({
             height: 30,
             paddingBottom: 0
         });
     });
 
-    $('#pollButtonYes').on('click', (e) => {
-        $('#pollAnswers').changeClass('block');
-        $('#pollButtonArea').changeClass('hidden');
-        $('#pollAnswerYes, #pollAnswerNo').changeClass('inline');
-        $('#pollAnswerBar').css('justifyContent', 'space-between');
+    $('#poll-button-yes').on('click', (e) => {
+        $('#poll-answers').changeClass('block');
+        $('#poll-button-area').changeClass('hidden');
+        $('#poll-answer-yes, #poll-answer-no').changeClass('inline');
+        $('#poll-answer-bar').css('justifyContent', 'space-between');
 
         if (!DEBUG) {
             $.ajax({
@@ -192,11 +211,11 @@ function addEventHandlers() {
         e.preventDefault();
     });
 
-    $('#pollButtonNo').on('click', function () {
-        $('#pollAnswers').changeClass('block');
-        $('#pollButtonArea').changeClass('hidden');
-        $('#pollAnswerYes, #pollAnswerNo').changeClass('inline');
-        $('#pollAnswerBar').css('justifyContent', 'space-between');
+    $('#poll-button-no').on('click', function () {
+        $('#poll-answers').changeClass('block');
+        $('#poll-button-area').changeClass('hidden');
+        $('#poll-answer-yes, #poll-answer-no').changeClass('inline');
+        $('#poll-answer-bar').css('justifyContent', 'space-between');
 
         if (!DEBUG) {
             $.ajax({
@@ -216,7 +235,7 @@ function addEventHandlers() {
         }
     });
 
-    $('.reportLinkA').each((i, elem) => {
+    $('.report-link-a').each((i, elem) => {
         $(elem).on('click', (e) => {
             if (!DEBUG) {
                 $.ajax({
@@ -224,7 +243,7 @@ function addEventHandlers() {
                     url: 'https://server.stopclickbait.com/report.php',
                     data: {
                         userid: userID,
-                        reportID: $(elem).parents('.commentBox')[0].id
+                        reportID: $(elem).parents('.comment-box')[0].id
                     },
                     success: (content) => {
                         processingVotingResults(content);
@@ -244,13 +263,13 @@ function processingCommentList(content) {
         createCommentBox(comment.id, comment.timestamp, comment.commentText, comment.userName, comment.starCount, comment.ownComment);
     }
 
-    $('#commentArea').wrapInner($('<div id="commentInner">'));
+    $('#comment-area').wrapInner($('<div id="comment-inner">'));
 }
 
 function processingVotingResults(results) {
-    $('#pollAnswerNo').html(chrome.i18n.getMessage('notClickbait') + "\n" + results.no + "%");
-    $('#pollAnswerYes').html("CLICKBAIT\n" + results.yes + "%");
-    $('#pollBar').val(results.yes);
+    $('#poll-answer-no').html(chrome.i18n.getMessage('notClickbait') + "\n" + results.no + "%");
+    $('#poll-answer-yes').html("CLICKBAIT\n" + results.yes + "%");
+    $('#poll-bar').val(results.yes);
 
 }
 
@@ -260,9 +279,9 @@ function linkify(text) {
 }
 
 function createCommentBox(commentId, timestamp, content, userNameString, voteNumber, ownComment) {
-    commentArea = $('#commentArea');
-    commentBox = $('<div class="commentBox" id="comment-' + commentId + '" data-timestamp="' + timestamp + '"/>').on('click', function () {
-        var t = $(this), clas = 'clickedCommentBox';
+    commentArea = $('#comment-area');
+    commentBox = $('<div class="comment-box" id="comment-' + commentId + '" data-timestamp="' + timestamp + '"/>').on('click', function () {
+        var t = $(this), clas = 'clicked-comment-box';
         if (ownComment) return;
         if (t.hasClass(clas)) {
             t.removeClass(clas);
@@ -273,37 +292,37 @@ function createCommentBox(commentId, timestamp, content, userNameString, voteNum
         t.css('backgroundColor', '').addClass(clas);
     }).on('mousedown', function () {
         if (ownComment) return;
-        $(this).css('filter', 'brightness(80%)');
+        $(this).css('backgroundColor', 'rgba(' +hex2rgb(user.selectedColor) +', 0.65)');
     }).on('mouseup', function () {
         if (ownComment) return;
-        $(this).css('filter', '');
+        $(this).attr('style', '');
     }).appendTo(commentArea);
-    commentLeft = $('<div class="commentLeft"/>').appendTo(commentBox);
-    commentText = $('<div class="commentText"/>').appendTo(commentLeft);
-    commentContent = $('<p class="commentContent" />').html(linkify(content)).appendTo(commentText);
-    userArea = $('<div class="userArea"/>').appendTo(commentLeft);
-    userName = $('<span class="userName"/>').text(userNameString).appendTo(userArea);
-    voteArea = $('<div class="voteArea">').prependTo(commentLeft);
-    deleteIcon = $('<div class="deleteIcon">c</div>').on('click', function () {
-        $(this).parents('.commentBox').addClass('blockedCommentBox').children('.deleteButtons').css('pointerEvents', 'none').fadeIn('fast');
+    commentLeft = $('<div class="comment-left"/>').appendTo(commentBox);
+    commentText = $('<div class="comment-text"/>').appendTo(commentLeft);
+    commentContent = $('<p class="comment-content" />').html(linkify(content)).appendTo(commentText);
+    userArea = $('<div class="user-area"/>').appendTo(commentLeft);
+    userName = $('<span class="user-name"/>').text(userNameString).appendTo(userArea);
+    voteArea = $('<div class="vote-area">').prependTo(commentLeft);
+    deleteIcon = $('<div class="delete-icon">c</div>').on('click', function () {
+        $(this).parents('.comment-box').addClass('blocked-comment-box').children('.delete-buttons').css('pointerEvents', 'none').fadeIn('fast');
     }).appendTo(commentBox);
-    upvoteStar = $('<span class="upvoteStar">a</span>').appendTo(voteArea);
+    upvoteStar = $('<span class="upvote-star">a</span>').appendTo(voteArea);
     upvotes = $('<span class="upvotes"/>').text(voteNumber).appendTo(voteArea);
-    deleteButtons = $('<div class="deleteButtons"/>').appendTo(commentBox);
-    deleteButton = $('<button class="deleteButton" data-localize="delete">delete</button>').on('click', function () {
+    deleteButtons = $('<div class="delete-buttons"/>').appendTo(commentBox);
+    deleteButton = $('<button class="delete-button" data-localize="delete">delete</button>').on('click', function () {
         $(this).parent().css({
             display: 'flex',
             justifyContent: 'center',
             verticalAlign: 'middle',
             alignItems: 'center'
-        }).html('<span style="color: #828282 !important; text-align: center">' + chrome.i18n.getMessage('postDeleted') + '</span>').parents('.commentBox').delay(1000).slideUp('fast', function () {
+        }).html('<span style="color: #828282 !important; text-align: center">' + chrome.i18n.getMessage('postDeleted') + '</span>').parents('.comment-box').delay(1000).slideUp('fast', function () {
             this.remove();
         });
     }).appendTo(deleteButtons);
-    cancelButton = $('<button class="cancelButton" data-localize="cancel">cancel</button>').on('click', function () {
+    cancelButton = $('<button class="cancel-button" data-localize="cancel">cancel</button>').on('click', function () {
         var t = $(this);
         t.parent().animate({left: '100%'}, 'fast', function(){
-            t.parents('.commentBox').css('pointerEvents', '').removeClass('blockedCommentBox');
+            t.parents('.comment-box').css('pointerEvents', '').removeClass('blocked-comment-box');
             t.parent().hide().css('left', 0);
         });
     }).on('mousedown', function () {
@@ -313,29 +332,29 @@ function createCommentBox(commentId, timestamp, content, userNameString, voteNum
     }).appendTo(deleteButtons);
 
     if (ownComment) {
-        commentBox.addClass('ownComment');
+        commentBox.addClass('own-comment');
     } else {
         separator = $('<span class="separator">|</span>').appendTo(userArea);
-        reportLink = $('<span class="reportLink">').appendTo(userArea);
-        reportLinkA = $('<a href="#" class="reportLinkA" data-localize="report">report</a>').appendTo(reportLink);
+        reportLink = $('<span class="report-link">').appendTo(userArea);
+        reportLinkA = $('<a href="#" class="report-link-a" data-localize="report">report</a>').appendTo(reportLink);
         deleteIcon.remove();
     }
 }
 
 function sortComments(by){
     if(typeof by == 'undefined') return;
-    var commentInner = $('#commentInner');
+    var commentInner = $('#comment-inner');
 
-    $('#TopNew .selected').removeClass('selected');
+    $('#top-new .selected').removeClass('selected');
 
     if(by == 'votes'){
-        $('#topSC').addClass('selected');
+        $('#sort-top').addClass('selected');
 
         commentInner.children().sort(function (a, b) {
             return parseInt($('.upvotes', b).text()) - parseInt($('.upvotes', a).text());
         }).appendTo(commentInner);
     } else if (by == 'date') {
-        $('#dateSC').addClass('selected');
+        $('#sort-date').addClass('selected');
 
         commentInner.children().sort(function (a, b) {
             return parseInt(b.dataset.timestamp) - parseInt(a.dataset.timestamp);
@@ -343,7 +362,8 @@ function sortComments(by){
     }
 }
 
-function hex2rgb(hex){
+function hex2rgb(hex, alpha){
+    if(typeof hex == 'undefined') return
     if(hex.length < 6) return;
     hex = hex.charAt(0) == '#' ? hex.substring(1, 7) : hex;
     var c = [
@@ -352,20 +372,44 @@ function hex2rgb(hex){
         parseInt(hex.substring(4,6),16)
     ];
 
-    return c.join(', ');
+    c = c.join(', ');
+
+    if(typeof alpha != 'undefined'){
+        return rgba(c, alpha);
+    }
+
+    return c;
+}
+
+function rgba(rgb, alpha){
+    if(typeof rgb == 'undefined' || typeof alpha == 'undefined') return;
+    return 'rgba(' +rgb +', ' +alpha +')';
 }
 
 function setElementColors(color) {
+    user.selectedColor = color;
+    var styles = $('style#stylesheet').length > 0 ? $('style#stylesheet') : $('<style id="stylesheet">').prependTo('body');
+    styles.html('.comment-box:hover, .clicked-comment-box { background-color: ' +hex2rgb(color, 0.35) +'; }\
+.own-comment { background-color: ' +color +'; }\
+#poll-area { border-color: ' +color +'; }\
+button { color: ' +color +'; border-color: ' +color +'; }\
+button:hover{ background-color: ' +color +'; }\
+#poll-buttons button, #poll-button-area { color: ' +color +'; }\
+#submitCB:focus { outline-color: ' +color +'; }\
+.comment-text a { color: rgba(' +hex2rgb(color, 0.5) +'; }');
+    return;
     var a = document.styleSheets;
     for (var i in a) if (a.hasOwnProperty(i)) {
         var b;
         a[i].cssRules ? b = a[i].cssRules : b = a[i].rules;
         for (var j in b) if (b.hasOwnProperty(j)) {
             if (b[j].selectorText === ".commentBox:hover" || b[j].selectorText === ".clickedCommentBox") {
+                console.log(b[j].selectorText +' { background-color: rgba(' +hex2rgb(color) +', 0.35); }');
                 b[j].style.backgroundColor = 'rgba(' +hex2rgb(color) +', 0.35)';
             }
             // Change color:
             if (b[j].selectorText === ".ownComment") {
+            console.log(b[j].selectorText +'{ background-color: ' +color +'; }');
                 b[j].style.backgroundColor = color;
             }
 
@@ -382,6 +426,7 @@ function setElementColors(color) {
 
             // Change color for button:
             if (b[j].selectorText === "button") {
+                console.log(b[j].selectorText +' { background-color: #ffffff; border: 1px solid; border-color: ' +color +'; border-radius: 3px; }');
                 b[j].style.backgroundColor = "#fff";
                 b[j].style.border = "1px solid";
                 b[j].style.borderColor = color;
@@ -391,6 +436,7 @@ function setElementColors(color) {
 
             // Change hover style for button:
             if (b[j].selectorText === "button:hover") {
+                console.log(b[j].selectorText +' { background-color: ' +color +'; color: #ffffff; }');
                 b[j].style.backgroundColor = color;
                 b[j].style.color = "#fff";
             }
@@ -398,11 +444,13 @@ function setElementColors(color) {
             // Change text color for these areas:
             if (b[j].selectorText === "#pollBttns button" ||
                 b[j].selectorText === "#pollButtonArea") {
+                    console.log(b[j].selectorText +' { color: ' +color +'; }');
                 b[j].style.color = color;
             }
 
             // Change the outline color of the textbox:
             if (b[j].selectorText === "#submitCB:focus") {
+                console.log(b[j].selectorText +' { outline-color: ' +color +'; } ');
                 b[j].style.outlineColor = color;
             }
         }
